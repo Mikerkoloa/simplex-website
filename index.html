@@ -130,7 +130,7 @@
         
         .switch {
             width: 50px;
-            height: 70px;
+            height: 90px;
             border: 2px solid #333;
             border-radius: 5px;
             display: flex;
@@ -145,6 +145,13 @@
         .switch-number {
             font-size: 12px;
             font-weight: bold;
+        }
+        
+        .switch-weight {
+            font-size: 11px;
+            color: #888;
+            white-space: nowrap;
+            line-height: 1;
         }
         
         .switch-position {
@@ -263,8 +270,8 @@
             }
             
             .switch {
-                width: 45px;
-                height: 65px;
+                width: 50px;
+                height: 90px;
             }
             
             .binary-display {
@@ -323,8 +330,14 @@
             }
             
             .switch {
-                width: 40px;
-                height: 60px;
+                width: 42px;
+                height: 82px;
+                min-width: 42px;
+                padding: 4px 2px;
+            }
+            
+            .switch-weight {
+                font-size: 10px;
             }
             
             .switch-position {
@@ -365,7 +378,9 @@
                     
                     <div class="info">
                         <strong>地址號碼：</strong> <span id="addressNumber"></span><br>
-                        <strong>8位二進制：</strong> <span id="binaryFull"></span>
+                        <strong>8位二進制（MSB→LSB）：</strong> <span id="binaryFull"></span><br>
+                        <strong>開關順序（SW1→SW8）：</strong> <span id="binarySwitchOrder"></span><br>
+                        <strong>ON 開關加總：</strong> <span id="sumFormula"></span>
                     </div>
                     
                     <div class="dip-switches">
@@ -404,18 +419,47 @@
         // 歷史記錄存儲
         let calculationHistory = [];
         
-        // 從localStorage載入歷史記錄
+        const WEIGHTS = [1, 2, 4, 8, 16, 32, 64, 128];
+        const HISTORY_KEY = 'dipSwitchHistoryV2';
+        
+        // 開關號 (1~8) 是否為 ON：SW1 = LSB
+        function isSwitchOn(address, switchNo) {
+            return (address >> (switchNo - 1)) & 1;
+        }
+        
+        // 依開關號由小到大組成字串
+        function switchString(address, switchNos) {
+            return switchNos.map(n => isSwitchOn(address, n)).join('');
+        }
+        
+        // 反向驗證：由 ON 開關權重加總
+        function sumOn(switches) {
+            return switches.reduce((sum, on, i) => sum + (on ? WEIGHTS[i] : 0), 0);
+        }
+        
+        // 從localStorage載入歷史記錄 (舊資料 key 不再使用，避免錯誤對應)
         function loadHistory() {
-            const saved = localStorage.getItem('dipSwitchHistory');
+            localStorage.removeItem('dipSwitchHistory');
+            const saved = localStorage.getItem(HISTORY_KEY);
             if (saved) {
-                calculationHistory = JSON.parse(saved);
+                calculationHistory = JSON.parse(saved).map(item => buildRecord(item.address, item.timestamp));
                 updateHistoryDisplay();
             }
         }
         
         // 保存歷史記錄到localStorage
         function saveHistory() {
-            localStorage.setItem('dipSwitchHistory', JSON.stringify(calculationHistory));
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(calculationHistory));
+        }
+        
+        function buildRecord(address, timestamp) {
+            return {
+                address: address,
+                binary: address.toString(2).padStart(8, '0'),
+                lsb: switchString(address, [1, 2, 3, 4]),
+                msb: switchString(address, [5, 6, 7, 8]),
+                timestamp: timestamp
+            };
         }
         
         function calculateDipSwitches() {
@@ -424,10 +468,8 @@
             const errorDiv = document.getElementById('errorMessage');
             const resultDiv = document.getElementById('resultSection');
             
-            // 清除之前的錯誤訊息
             errorDiv.style.display = 'none';
             
-            // 驗證輸入
             if (isNaN(address) || address < 0 || address > 255) {
                 errorDiv.textContent = '請輸入有效的地址號碼 (0-255)';
                 errorDiv.style.display = 'block';
@@ -435,27 +477,22 @@
                 return;
             }
             
-            // 轉換為8位二進制
-            const binary = address.toString(2).padStart(8, '0');
+            const rec = buildRecord(address, new Date().toLocaleString('zh-TW'));
+            const onList = WEIGHTS.filter((w, i) => isSwitchOn(address, i + 1));
             
-            // 分割為兩組 (LSB 1-4, MSB 5-8)
-            const lsb = binary.slice(4, 8); // 後4位 (1-4號)
-            const msb = binary.slice(0, 4); // 前4位 (5-8號)
-            
-            // 更新顯示
             document.getElementById('addressNumber').textContent = address;
-            document.getElementById('binaryFull').textContent = binary;
-            document.getElementById('binary1to4').textContent = lsb;
-            document.getElementById('binary5to8').textContent = msb;
+            document.getElementById('binaryFull').textContent = rec.binary;
+            document.getElementById('binarySwitchOrder').textContent = rec.lsb + rec.msb;
+            document.getElementById('sumFormula').textContent =
+                (onList.length ? onList.join(' + ') : '0') + ' = ' + address;
+            document.getElementById('binary1to4').textContent = rec.lsb;
+            document.getElementById('binary5to8').textContent = rec.msb;
             
-            // 生成開關視覺化
-            generateSwitches('switches1to4', lsb, [1, 2, 3, 4]);
-            generateSwitches('switches5to8', msb, [5, 6, 7, 8]);
+            generateSwitches('switches1to4', address, [1, 2, 3, 4]);
+            generateSwitches('switches5to8', address, [5, 6, 7, 8]);
             
-            // 添加到歷史記錄
-            addToHistory(address, binary, lsb, msb);
+            addToHistory(address, rec.binary, rec.lsb, rec.msb);
             
-            // 顯示結果
             resultDiv.style.display = 'block';
         }
         
@@ -508,8 +545,8 @@
                 historyItem.innerHTML = `
                     <div class="history-item-header">地址 ${item.address}</div>
                     <div class="history-item-details">
-                        二進制: ${item.binary}<br>
-                        1-4號: ${item.lsb} | 5-8號: ${item.msb}<br>
+                        二進制(MSB→LSB): ${item.binary}<br>
+                        SW1-4: ${item.lsb} | SW5-8: ${item.msb}<br>
                         時間: ${item.timestamp}
                     </div>
                 `;
@@ -526,39 +563,37 @@
         function clearHistory() {
             if (confirm('確定要清除所有歷史記錄嗎？')) {
                 calculationHistory = [];
-                localStorage.removeItem('dipSwitchHistory');
+                localStorage.removeItem(HISTORY_KEY);
                 updateHistoryDisplay();
             }
         }
         
-        function generateSwitches(containerId, binaryString, switchNumbers) {
+        function generateSwitches(containerId, address, switchNumbers) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             
-            for (let i = 0; i < 4; i++) {
-                const bit = binaryString[i];
+            switchNumbers.forEach(no => {
+                const on = isSwitchOn(address, no) === 1;
                 const switchDiv = document.createElement('div');
                 switchDiv.className = 'switch';
                 
                 const numberDiv = document.createElement('div');
                 numberDiv.className = 'switch-number';
-                numberDiv.textContent = switchNumbers[i];
+                numberDiv.textContent = no;
+                
+                const weightDiv = document.createElement('div');
+                weightDiv.className = 'switch-weight';
+                weightDiv.textContent = WEIGHTS[no - 1];
                 
                 const positionDiv = document.createElement('div');
-                positionDiv.className = 'switch-position';
-                
-                if (bit === '1') {
-                    positionDiv.className += ' switch-on';
-                    positionDiv.textContent = 'ON';
-                } else {
-                    positionDiv.className += ' switch-off';
-                    positionDiv.textContent = 'OFF';
-                }
+                positionDiv.className = 'switch-position ' + (on ? 'switch-on' : 'switch-off');
+                positionDiv.textContent = on ? 'ON' : 'OFF';
                 
                 switchDiv.appendChild(numberDiv);
+                switchDiv.appendChild(weightDiv);
                 switchDiv.appendChild(positionDiv);
                 container.appendChild(switchDiv);
-            }
+            });
         }
         
         // 允許按Enter鍵計算

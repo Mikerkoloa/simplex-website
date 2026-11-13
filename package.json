@@ -1,0 +1,24 @@
+{
+  "name": "simplex-website",
+  "version": "1.0.0",
+  "description": "simplex 撥碼二進制",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mikerkoloa/simplex-website.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Mikerkoloa/simplex-website/issues"
+  },
+  "homepage": "https://github.com/Mikerkoloa/simplex-website#readme",
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
